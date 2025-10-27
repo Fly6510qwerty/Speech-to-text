@@ -1,37 +1,78 @@
-const START_BTN = document.getElementById('recordBtn') //This is for the HTMLButtonElement 
-const RESULTS = document.getElementById('resultBox') //This is for the HTMLDivElement
+const START_BTN = document.getElementById('recordBtn') // HTMLButtonElement
+const RESULTS = document.getElementById('resultBox') // HTMLDivElement
 
+let isRecording = false // whether recording is in progress
+let speechObj = null // SpeechRecognition instance
 
-let isRecording = false //This is to create a boolean variable to check if the recording is in progress or not
-let speechObj = null //This is creating a variable to hold the SpeechRecognition object and initializing it as null
+// Use the browser SpeechRecognition implementation if available
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
 
-const Speechregonition = window.SpeechRecognition || window.webkitSpeechRecognition
-//Speech recognizion API
-
-
-if (!Speechregonition) {
-    START_BIN.innerText = "Microphone not enabled"
+if (!SpeechRecognition) {
+    START_BTN.innerText = "Microphone not supported"
     START_BTN.disabled = true
+} else {
+    START_BTN.addEventListener('click', () => {
+        isRecording = !isRecording // toggle recording state
+        isRecording ? startRecording() : stopRecording()
+    })
 }
-
-START_BTN.addEventListener('click', () => {
-    isRecording = !isRecording //This is to toggle the isRecording variable between true and false
-    isRecording ? startRecording() : stopRecording() //This is to call the startRecording or stopRecording function based on the value of isRecording
-})
 
 function startRecording() {
-    START_BTN.innerText = "Recording in progress..."
-    speechObj = new SpeechRegonition() //This is to create a new instance of the SpeechRecognition object
-    speechObj.start() //This is to start the speech recognition process
-    speechObj.onresult = transcribe 
+    START_BTN.innerText = "Recording... click to stop"
+    speechObj = new SpeechRecognition()
+    // continuous can be true if you want longer capture; browsers vary
+    speechObj.continuous = false
+    speechObj.interimResults = true
+    speechObj.lang = 'en-US' // change as needed or expose to UI
+
+    speechObj.onresult = transcribe
+    speechObj.onerror = (err) => {
+        console.error('SpeechRecognition error', err)
+        RESULTS.textContent = 'Error: ' + (err.error || err.message || 'unknown')
+        isRecording = false
+        START_BTN.innerText = 'Start'
+    }
+
+    speechObj.onend = () => {
+        // when recognition ends (user stopped speaking or .stop() called)
+        isRecording = false
+        START_BTN.innerText = 'Start'
+    }
+
+    try {
+        speechObj.start()
+    } catch (e) {
+        // some browsers throw if start() called twice
+        console.warn('start() failed', e)
+    }
 }
 
-function transcribe(e) { //e: SpeechRecognitionEvent
-console.log(e)
+function transcribe(e) { // e: SpeechRecognitionEvent
+    // Combine all results (interim + final) into a single transcript string
+    const transcript = Array.from(e.results)
+        .map(result => result[0].transcript)
+        .join('')
+
+    // Show interim/final transcript in the result box
+    RESULTS.textContent = transcript
+
+    // If a final result occurred, you may want to stop
+    if (e.results[0].isFinal) {
+        // stopRecording() will be triggered by onend, but you can stop explicitly
+        // stopRecording()
+        console.log('Final transcript:', transcript)
+    }
 }
 
 function stopRecording() {
-    speechObj.stop() //This is to stop the speech recognition process
-    speechObj = null //This is to reset the speechObj variable to null
-    START_BTN.innerText = "Start Transalating"
+    if (speechObj) {
+        try {
+            speechObj.stop()
+        } catch (e) {
+            console.warn('stop() failed', e)
+        }
+    }
+    speechObj = null
+    isRecording = false
+    START_BTN.innerText = 'Start'
 }
